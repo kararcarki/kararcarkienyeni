@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Karar Çarkı</title>
+<style>
+:root{--bg:#0b1020;--card:#151c31;--text:#f7f9ff;--muted:#9ca8c7;--accent:#6c63ff}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 20%,#26345f 0,#0b1020 55%);font-family:Inter,Arial,sans-serif;color:var(--text);display:flex;align-items:center;justify-content:center}
+.app{width:min(1100px,94vw);display:grid;grid-template-columns:330px 1fr;gap:42px;align-items:center}
+.panel{background:rgba(21,28,49,.92);border:1px solid #303b60;border-radius:22px;padding:25px;box-shadow:0 20px 70px #0007}
+h1{margin:0 0 8px;font-size:27px}.sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+textarea{width:100%;height:190px;resize:vertical;background:#0e1528;color:white;border:1px solid #354263;border-radius:13px;padding:13px;font-size:16px;outline:none}
+select,button{width:100%;height:48px;border-radius:12px;margin-top:12px;font-size:15px}
+select{background:#0e1528;color:white;border:1px solid #354263;padding:0 12px}
+button{border:0;font-weight:800;cursor:pointer;transition:.2s}
+#update{background:#273250;color:#fff}#spin{background:linear-gradient(135deg,#7c72ff,#4f46e5);color:#fff;box-shadow:0 8px 25px #5b54ff55}
+button:hover{transform:translateY(-2px)}button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.result{text-align:center;min-height:32px;margin-top:17px;font-size:20px;font-weight:800}
+.wheelArea{position:relative;width:min(620px,80vw);aspect-ratio:1;display:flex;align-items:center;justify-content:center}
+canvas{width:100%;height:100%;filter:drop-shadow(0 25px 35px #0009)}
+.pointer{position:absolute;z-index:4;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-top:48px solid #fff;filter:drop-shadow(0 4px 6px #0009)}
+.center{position:absolute;width:72px;height:72px;border-radius:50%;background:#11182c;border:4px solid #fff;z-index:3;box-shadow:0 0 0 7px #ffffff18,0 0 35px #000}
+.note{font-size:12px;color:#7f8bab;margin-top:13px;line-height:1.4}
+@media(max-width:850px){.app{grid-template-columns:1fr}.panel{order:2}.wheelArea{width:min(570px,90vw);margin:auto}}
+</style>
+</head>
+<body>
+<div class="app">
+<section class="panel">
+<h1>🎡 Karar Çarkı</h1>
+<div class="sub">İsimleri alt alta yaz ve çarkı çalıştır.</div>
+<textarea id="names" placeholder="İsimleri buraya alt alta yaz..."></textarea>
+<select id="winner"><option value="">Rastgele sonuç</option></select>
+<button id="update">Listeyi Güncelle</button>
+<button id="spin">ÇARKI ÇEVİR</button>
+<div class="result" id="result"></div>
+<div class="note">Ses efektleri tarayıcı tarafından çevrim sırasında oluşturulur.</div>
+</section>
+<div class="wheelArea">
+<div class="pointer"></div><canvas id="wheel" width="700" height="700"></canvas><div class="center"></div>
+</div>
+</div>
+
+<script>
+const c=document.getElementById('wheel'),x=c.getContext('2d'),ta=document.getElementById('names'),
+sel=document.getElementById('winner'),spinBtn=document.getElementById('spin'),upd=document.getElementById('update'),
+res=document.getElementById('result');
+let names=[],rot=0,busy=false,audio;
+
+const colors=['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+
+function list(){
+ names=ta.value.split(/\n/).map(s=>s.trim()).filter(Boolean);
+ sel.innerHTML='<option value="">Rastgele sonuç</option>';
+ names.forEach(n=>{let o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o)});
+ draw();res.textContent='';
+}
+function draw(){
+ const cx=350,cy=350,r=325;if(!names.length){x.clearRect(0,0,700,700);x.beginPath();x.arc(cx,cy,r,0,Math.PI*2);x.fillStyle='#151c31';x.fill();x.strokeStyle='#354263';x.lineWidth=4;x.stroke();x.fillStyle='#9ca8c7';x.font='700 24px Arial';x.textAlign='center';x.fillText('İsimleri ekleyin',cx,cy);return;}
+ x.clearRect(0,0,700,700);let sl=Math.PI*2/names.length;
+ names.forEach((n,i)=>{
+  let a=rot+i*sl;
+  x.beginPath();x.moveTo(cx,cy);x.arc(cx,cy,r,a,a+sl);x.closePath();
+  x.fillStyle=colors[i%colors.length];x.fill();x.lineWidth=3;x.strokeStyle='#fff';x.stroke();
+  x.save();x.translate(cx,cy);x.rotate(a+sl/2);x.textAlign='right';x.fillStyle='#fff';
+  x.font='800 '+Math.max(18,Math.min(29,34-n.length))+'px Arial';x.shadowColor='#0008';x.shadowBlur=5;
+  x.fillText(n,r-22,10);x.restore();
+ });
+ x.beginPath();x.arc(cx,cy,35,0,Math.PI*2);x.fillStyle='#11182c';x.fill();
+}
+function beep(freq=500,dur=.045){
+ try{audio=audio||new(window.AudioContext||window.webkitAudioContext)();let o=audio.createOscillator(),g=audio.createGain();
+ o.frequency.value=freq;o.type='sine';g.gain.setValueAtTime(.0001,audio.currentTime);g.gain.exponentialRampToValueAtTime(.09,audio.currentTime+.005);
+ g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+dur);o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+dur+.01)}catch(e){}
+}
+function winnerIndex(){
+ // "Eren" veya "Ahmet" listede varsa, sonuç daima bunlardan biri olur.
+ let preferred=names.findIndex(n=>n.trim().toLocaleLowerCase('tr-TR')==='eren');
+ if(preferred<0) preferred=names.findIndex(n=>n.trim().toLocaleLowerCase('tr-TR')==='ahmet');
+ if(preferred>=0)return preferred;
+ if(sel.value)return names.indexOf(sel.value);
+ return Math.floor(Math.random()*names.length);
+}
+function spin(){
+ if(busy)return;
+ if(!names.length){res.textContent='Önce en az bir isim ekleyin.';return;}
+ busy=true;spinBtn.disabled=upd.disabled=true;res.textContent='';beep(260,.08);
+ let idx=winnerIndex(),sl=Math.PI*2/names.length;
+ let target=-Math.PI/2-(idx*sl+sl/2),delta=target-rot;
+ while(delta<0)delta+=Math.PI*2;
+ delta+=Math.PI*2*(6+Math.floor(Math.random()*3));
+ let startRot=rot,endRot=rot+delta,start=performance.now(),duration=5200,lastTick=-1;
+ function frame(now){
+  let t=Math.min(1,(now-start)/duration),e=1-Math.pow(1-t,5);rot=startRot+(endRot-startRot)*e;draw();
+  let tick=Math.floor((rot/(Math.PI*2))*names.length);
+  if(tick!==lastTick){beep(360+Math.min(500,t*500),.025);lastTick=tick}
+  if(t<1)requestAnimationFrame(frame);else{
+   rot=target;draw();beep(880,.16);setTimeout(()=>beep(1100,.12),100);
+   res.textContent='🏆 Kazanan: '+names[idx];busy=false;spinBtn.disabled=upd.disabled=false;
+  }
+ }
+ requestAnimationFrame(frame);
+}
+upd.onclick=list;spinBtn.onclick=spin;list();
+</script>
+</body>
+</html>
